@@ -2,7 +2,11 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
-from signature_service.application import create_signature_request_from_upload, send_signature_request
+from signature_service.application import (
+    create_signature_request_from_upload,
+    send_signature_request,
+    sync_signature_request_status,
+)
 from signature_service.forms import SignatureRequestCreateForm
 from signature_service.models import SignatureRequest
 from signature_service.services import SignatureServiceError
@@ -64,6 +68,8 @@ def signature_detail_view(request, signature_id):
                     kwargs={"signature_id": signature_request.id},
                 )
             )
+    else:
+        signature_request = sync_signature_request_status(signature_request=signature_request)
 
     return render(
         request,

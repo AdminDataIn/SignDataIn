@@ -11,6 +11,7 @@ from signature_service.application import (
     download_signed_document,
     process_signature_webhook,
     send_signature_request,
+    sync_signature_request_status,
 )
 from signature_service.forms import SignatureRequestCreateForm
 from signature_service.models import SignatureEventLog, SignatureRequest
@@ -83,6 +84,7 @@ def signature_detail_view(request, signature_id):
         return HttpResponseNotAllowed(["GET"])
 
     signature_request = get_object_or_404(SignatureRequest, pk=signature_id)
+    signature_request = sync_signature_request_status(signature_request=signature_request)
     payload = _serialize_signature_request(signature_request)
     payload["events"] = [
         {

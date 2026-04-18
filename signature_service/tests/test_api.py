@@ -113,3 +113,34 @@ class SignatureApiTests(TestCase):
                 processed=True,
             ).exists()
         )
+
+    @patch("signature_service.providers.ZapSignProvider.get_document_status")
+    def test_detail_syncs_pending_signature_from_provider(self, get_document_status_mock):
+        get_document_status_mock.return_value = {
+            "token": "doc-token-123",
+            "status": "signed",
+            "signed_at": "2026-04-18T17:54:00Z",
+            "signers": [{"ip": "203.0.113.10"}],
+            "signed_file": "https://files.example/signed.pdf",
+        }
+        signature_request = SignatureRequest.objects.create(
+            document_name="contrato.pdf",
+            document_url="http://testserver/api/signatures/fake/document/",
+            document_file=SimpleUploadedFile(
+                "contrato.pdf",
+                b"%PDF-1.4 test pdf",
+                content_type="application/pdf",
+            ),
+            signer_name="Ana Gomez",
+            signer_email="ana@example.com",
+            status=SignatureRequest.SignatureStatus.PENDING,
+            provider_document_id="doc-token-123",
+        )
+
+        response = self.client.get(f"/api/signatures/{signature_request.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        signature_request.refresh_from_db()
+        self.assertEqual(signature_request.status, SignatureRequest.SignatureStatus.SIGNED)
+        self.assertEqual(signature_request.provider_status, "signed")
+        self.assertEqual(signature_request.signer_ip, "203.0.113.10")

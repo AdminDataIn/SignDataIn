@@ -65,3 +65,31 @@ class SignatureUiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "pagare.pdf")
+
+    @patch("signature_service.providers.ZapSignProvider.get_document_status")
+    def test_signature_detail_syncs_pending_status(self, get_document_status_mock):
+        get_document_status_mock.return_value = {
+            "token": "doc-token-ui",
+            "status": "signed",
+            "signed_at": "2026-04-18T17:54:00Z",
+            "signers": [{"ip": "203.0.113.10"}],
+        }
+        signature_request = SignatureRequest.objects.create(
+            document_name="pagare.pdf",
+            document_url="http://testserver/api/signatures/fake/document/",
+            document_file=SimpleUploadedFile(
+                "pagare.pdf",
+                b"%PDF-1.4 ui pdf",
+                content_type="application/pdf",
+            ),
+            signer_name="Carlos Ruiz",
+            signer_email="carlos@example.com",
+            status=SignatureRequest.SignatureStatus.PENDING,
+            provider_document_id="doc-token-ui",
+        )
+
+        response = self.client.get(f"/signatures/{signature_request.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        signature_request.refresh_from_db()
+        self.assertEqual(signature_request.status, SignatureRequest.SignatureStatus.SIGNED)

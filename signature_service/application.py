@@ -52,6 +52,11 @@ def send_signature_request(*, signature_request, brand_name="DataIn"):
     return service.send_for_signature(signature_request, brand_name=brand_name)
 
 
+def sync_signature_request_status(*, signature_request):
+    service = SignatureService()
+    return service.sync_status(signature_request)
+
+
 def download_signed_document(*, signature_request):
     service = SignatureService()
     return service.download_signed_document(signature_request)

@@ -361,6 +361,108 @@ class SignatureService:
             logger.error(f"[SignatureService] Error descargando: {str(e)}")
             raise SignatureServiceError(f"Error descargando documento: {str(e)}")
 
+    def sync_status(self, signature_request: SignatureRequest) -> SignatureRequest:
+        """
+        Sincroniza el estado local consultando el documento en ZapSign.
+
+        Se usa como fallback cuando el webhook no llegó, fue rechazado o llegó tarde.
+        """
+        if not signature_request.provider_document_id:
+            return signature_request
+
+        if signature_request.status in {
+            SignatureRequest.SignatureStatus.SIGNED,
+            SignatureRequest.SignatureStatus.REFUSED,
+            SignatureRequest.SignatureStatus.CANCELLED,
+            SignatureRequest.SignatureStatus.EXPIRED,
+        }:
+            return signature_request
+
+        try:
+            payload = self.provider_client.get_document_status(signature_request.provider_document_id)
+        except ZapSignProviderError as e:
+            logger.warning(
+                f"[SignatureService] No fue posible sincronizar {signature_request.id}: {str(e)}"
+            )
+            return signature_request
+
+        provider_status = payload.get("status") or ""
+        action = ZapSignProvider.normalize_status_to_event(
+            payload.get("event_type", ""),
+            provider_status,
+        )
+
+        update_fields = []
+        if signature_request.provider_status != provider_status:
+            signature_request.provider_status = provider_status
+            update_fields.append("provider_status")
+
+        if payload.get("signed_file") or payload.get("signed_file_url"):
+            signed_document_url = payload.get("signed_file") or payload.get("signed_file_url")
+            if signature_request.provider_signed_document_url != signed_document_url:
+                signature_request.provider_signed_document_url = signed_document_url
+                update_fields.append("provider_signed_document_url")
+
+        signer_ip = self._extract_signer_ip(payload)
+        if signer_ip and signature_request.signer_ip != signer_ip:
+            signature_request.signer_ip = signer_ip
+            update_fields.append("signer_ip")
+
+        if action == "signed":
+            if signature_request.status != SignatureRequest.SignatureStatus.SIGNED:
+                signature_request.status = SignatureRequest.SignatureStatus.SIGNED
+                update_fields.append("status")
+            signed_at = self._parse_provider_datetime(payload.get("signed_at"))
+            if signed_at and signature_request.signed_at != signed_at:
+                signature_request.signed_at = signed_at
+                update_fields.append("signed_at")
+        elif action == "refused":
+            if signature_request.status != SignatureRequest.SignatureStatus.REFUSED:
+                signature_request.status = SignatureRequest.SignatureStatus.REFUSED
+                update_fields.append("status")
+            refused_at = self._parse_provider_datetime(
+                payload.get("refused_at") or payload.get("updated_at")
+            )
+            if refused_at and signature_request.refused_at != refused_at:
+                signature_request.refused_at = refused_at
+                update_fields.append("refused_at")
+
+        if action in {"signed", "refused"}:
+            signature_request.provider_webhook_payload = payload
+            update_fields.append("provider_webhook_payload")
+
+        if update_fields:
+            signature_request.save(update_fields=list(dict.fromkeys(update_fields)))
+            logger.info(
+                f"[SignatureService] Estado sincronizado desde ZapSign: "
+                f"{signature_request.id} -> {signature_request.status}"
+            )
+
+        return signature_request
+
+    @staticmethod
+    def _extract_signer_ip(payload: Dict) -> Optional[str]:
+        signers = payload.get("signers") or []
+        if not signers:
+            return None
+        signer = signers[0] or {}
+        return signer.get("ip") or signer.get("ip_address")
+
+    @staticmethod
+    def _parse_provider_datetime(value: Optional[str]):
+        if not value:
+            return None
+        raw_value = value.strip()
+        if not raw_value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        except ValueError:
+            return timezone.now()
+        if timezone.is_naive(parsed):
+            return timezone.make_aware(parsed, timezone.get_current_timezone())
+        return parsed
+
 
 # Importar settings aquí para evitar circular imports
 from django.conf import settings
