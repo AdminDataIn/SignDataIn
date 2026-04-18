@@ -203,30 +203,60 @@ class ZapSignProvider:
             logger.error(f"[ZapSign] Error de conexión: {str(e)}")
             raise ZapSignProviderError(str(e))
     
-    def download_signed_document(self, document_token: str) -> bytes:
+    def _download_file_from_url(self, file_url: str) -> bytes:
+        """
+        Descarga un archivo desde una URL temporal entregada por ZapSign.
+        """
+        response = requests.get(file_url, timeout=30)
+        response.raise_for_status()
+        return response.content
+
+    def download_signed_document(
+        self,
+        document_token: str,
+        signed_file_url: Optional[str] = None,
+    ) -> bytes:
         """
         Descarga el documento firmado.
-        
+
         Args:
             document_token: Token del documento
-        
+            signed_file_url: URL temporal del archivo firmado si ya fue obtenida
+
         Returns:
             bytes: Contenido del PDF firmado
         """
-        endpoint = f"{self.base_url}/docs/{document_token}/download-signed/"
-        
         try:
             logger.info(f"[ZapSign] Descargando documento firmado: {document_token}")
-            
+
+            if signed_file_url:
+                try:
+                    content = self._download_file_from_url(signed_file_url)
+                    logger.info(f"[ZapSign] PDF descargado desde signed_file_url ({len(content)} bytes)")
+                    return content
+                except requests.exceptions.RequestException as e:
+                    logger.warning(
+                        f"[ZapSign] signed_file_url expirado o inválido para {document_token}: {str(e)}"
+                    )
+
+            detail = self.get_document_status(document_token)
+            fresh_signed_file_url = detail.get("signed_file") or detail.get("signed_file_url")
+            if fresh_signed_file_url:
+                content = self._download_file_from_url(fresh_signed_file_url)
+                logger.info(
+                    f"[ZapSign] PDF descargado desde detalle de documento ({len(content)} bytes)"
+                )
+                return content
+
+            endpoint = f"{self.base_url}/docs/{document_token}/download-signed/"
             response = requests.get(
                 endpoint,
                 headers=self._get_headers(),
                 timeout=30
             )
-            
             response.raise_for_status()
-            
-            logger.info(f"[ZapSign] PDF descargado ({len(response.content)} bytes)")
+
+            logger.info(f"[ZapSign] PDF descargado desde endpoint legado ({len(response.content)} bytes)")
             return response.content
         
         except requests.exceptions.HTTPError as e:

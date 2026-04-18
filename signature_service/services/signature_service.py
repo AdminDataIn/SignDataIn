@@ -6,8 +6,11 @@ Orquesta la interacción entre proveedores y modelos de datos.
 import logging
 from typing import Dict, Optional
 from datetime import datetime
+from pathlib import Path
+
 from django.utils import timezone
 from django.db import transaction
+from django.core.files.base import ContentFile
 
 from signature_service.models import SignatureRequest, SignatureEventLog
 from signature_service.providers import ZapSignProvider, ZapSignProviderError
@@ -344,10 +347,34 @@ class SignatureService:
         
         if not signature_request.provider_document_id:
             raise SignatureServiceError("No hay document_id del proveedor")
+
+        if signature_request.signed_document_file:
+            try:
+                with signature_request.signed_document_file.open("rb") as signed_file:
+                    content = signed_file.read()
+                if content:
+                    logger.info(
+                        f"[SignatureService] Documento firmado servido desde almacenamiento local: "
+                        f"{signature_request.id}"
+                    )
+                    return content
+            except Exception as e:
+                logger.warning(
+                    f"[SignatureService] No se pudo leer copia local firmada para "
+                    f"{signature_request.id}: {str(e)}"
+                )
         
         try:
             pdf_bytes = self.provider_client.download_signed_document(
-                signature_request.provider_document_id
+                signature_request.provider_document_id,
+                signed_file_url=signature_request.provider_signed_document_url,
+            )
+
+            filename = f"{Path(signature_request.document_name).stem}_signed.pdf"
+            signature_request.signed_document_file.save(
+                filename,
+                ContentFile(pdf_bytes),
+                save=True,
             )
             
             logger.info(

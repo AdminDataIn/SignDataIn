@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from requests.exceptions import HTTPError
+from requests.models import Response
 
 from signature_service.models import SignatureEventLog, SignatureRequest
 
@@ -77,6 +79,51 @@ class SignatureApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
+
+    @patch("signature_service.providers.requests.get")
+    @patch("signature_service.providers.ZapSignProvider.get_document_status")
+    def test_download_signed_document_uses_detail_signed_file_url(
+        self,
+        get_document_status_mock,
+        requests_get_mock,
+    ):
+        expired_response = Response()
+        expired_response.status_code = 404
+        expired_response._content = b"not found"
+        http_error = HTTPError(response=expired_response)
+
+        signed_response = Response()
+        signed_response.status_code = 200
+        signed_response._content = b"%PDF-1.4 signed fresh"
+
+        requests_get_mock.side_effect = [http_error, signed_response]
+        get_document_status_mock.return_value = {
+            "token": "doc-token-123",
+            "status": "signed",
+            "signed_file": "https://files.example/fresh-signed.pdf",
+        }
+
+        signature_request = SignatureRequest.objects.create(
+            document_name="contrato.pdf",
+            document_url="http://testserver/api/signatures/fake/document/",
+            document_file=SimpleUploadedFile(
+                "contrato.pdf",
+                b"%PDF-1.4 test pdf",
+                content_type="application/pdf",
+            ),
+            signer_name="Ana Gomez",
+            signer_email="ana@example.com",
+            status=SignatureRequest.SignatureStatus.SIGNED,
+            provider_document_id="doc-token-123",
+            provider_signed_document_url="https://files.example/expired-signed.pdf",
+        )
+
+        response = self.client.get(f"/api/signatures/{signature_request.id}/download/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        signature_request.refresh_from_db()
+        self.assertTrue(signature_request.signed_document_file.name)
 
     @patch("signature_service.providers.ZapSignProvider.validate_webhook_signature")
     def test_process_webhook(self, validate_webhook_signature_mock):
