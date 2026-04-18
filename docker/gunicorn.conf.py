@@ -1,0 +1,10 @@
+bind = "0.0.0.0:8000"
+workers = 3
+threads = 2
+worker_tmp_dir = "/dev/shm"
+timeout = 60
+graceful_timeout = 30
+keepalive = 5
+accesslog = "-"
+errorlog = "-"
+capture_output = True

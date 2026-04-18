@@ -1,0 +1,78 @@
+name: datain-signature
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: datain/signature-service:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://signature_user:change-me@db:5432/signature_service}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-sign.datain.pro}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://sign.datain.pro}
+      APP_DOMAIN: ${APP_DOMAIN:-sign.datain.pro}
+      APP_USE_HTTPS: ${APP_USE_HTTPS:-True}
+      SIGNATURE_PUBLIC_BASE_URL: ${SIGNATURE_PUBLIC_BASE_URL:-https://sign.datain.pro}
+      ZAPSIGN_ENVIRONMENT: ${ZAPSIGN_ENVIRONMENT:-production}
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.sign-http.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.sign-http.entrypoints=web
+      - traefik.http.routers.sign-http.middlewares=sign-https-redirect
+      - traefik.http.middlewares.sign-https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.sign-https-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.sign-https.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.sign-https.entrypoints=websecure
+      - traefik.http.routers.sign-https.tls=true
+      - traefik.http.routers.sign-https.tls.certresolver=letsencrypt
+      - traefik.http.services.sign.loadbalancer.server.port=8000
+    networks:
+      - internal
+      - web
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-signature_service}
+      POSTGRES_USER: ${POSTGRES_USER:-signature_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-signature_user} -d ${POSTGRES_DB:-signature_service}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    external: true
+
+volumes:
+  postgres_data:
+  static_data:
+  media_data:

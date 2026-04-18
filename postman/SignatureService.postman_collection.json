@@ -1,0 +1,111 @@
+{
+  "info": {
+    "name": "DataIn Signature Service",
+    "_postman_id": "9c602c56-b559-44a3-b4dd-71a0ebac8a2c",
+    "description": "Coleccion base para probar la app Django standalone de firma digital.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "signature_id",
+      "value": ""
+    },
+    {
+      "key": "webhook_secret",
+      "value": "webhook-secret"
+    }
+  ],
+  "item": [
+    {
+      "name": "List signatures",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/signatures/"
+      }
+    },
+    {
+      "name": "Create signature",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "document",
+              "type": "file",
+              "src": ""
+            },
+            {
+              "key": "signer_name",
+              "type": "text",
+              "value": "Ana Gomez"
+            },
+            {
+              "key": "signer_email",
+              "type": "text",
+              "value": "ana@example.com"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/signatures/"
+      }
+    },
+    {
+      "name": "Signature detail",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/signatures/{{signature_id}}/"
+      }
+    },
+    {
+      "name": "Send signature",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"brand_name\": \"DataIn\"\n}"
+        },
+        "url": "{{base_url}}/api/signatures/{{signature_id}}/send/"
+      }
+    },
+    {
+      "name": "Download signed PDF",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/signatures/{{signature_id}}/download/"
+      }
+    },
+    {
+      "name": "Webhook signed event",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-ZapSign-Secret",
+            "value": "{{webhook_secret}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event\": \"doc_signed\",\n  \"token\": \"TOKEN_DEL_DOCUMENTO\",\n  \"status\": \"signed\",\n  \"signers\": [\n    {\n      \"ip\": \"203.0.113.10\"\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/webhooks/signatures/"
+      }
+    }
+  ]
+}

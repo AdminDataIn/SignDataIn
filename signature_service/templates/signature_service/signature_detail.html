@@ -1,0 +1,81 @@
+{% extends "signature_service/base.html" %}
+
+{% block title %}Detalle | DataIn Sign{% endblock %}
+{% block hero_title %}Seguimiento del proceso de firma{% endblock %}
+{% block hero_text %}Controla el inicio del proceso, revisa el código de seguimiento y descarga el PDF firmado cuando el documento quede finalizado.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="panel stack">
+        <div>
+            <h2 class="page-title">{{ signature_request.document_name }}</h2>
+            <p class="page-subtitle">Solicitud {{ signature_request.id }}</p>
+            <span class="status {{ signature_request.status|lower }}">{{ signature_request.get_status_display }}</span>
+        </div>
+        {% if error_message %}
+        <div class="alert-error">{{ error_message }}</div>
+        {% endif %}
+        <div class="grid two meta">
+            <div>
+                <strong>Firmante</strong>
+                <div>{{ signature_request.signer_name }}</div>
+                <div class="muted">{{ signature_request.signer_email }}</div>
+            </div>
+            <div>
+                <strong>Canal de firma</strong>
+                <div>{{ signature_request.provider|upper }}</div>
+                <div class="muted">{{ signature_request.provider_document_id|default:"Sin enviar" }}</div>
+            </div>
+            <div>
+                <strong>Creado</strong>
+                <div>{{ signature_request.created_at|date:"Y-m-d H:i" }}</div>
+            </div>
+            <div>
+                <strong>Ultima actualizacion</strong>
+                <div>{{ signature_request.signed_at|default:signature_request.sent_at|default:signature_request.created_at|date:"Y-m-d H:i" }}</div>
+            </div>
+        </div>
+        <div class="actions">
+            <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <button type="submit" {% if signature_request.status != 'CREATED' %}disabled{% endif %}>Iniciar firma</button>
+            </form>
+            {% if signature_request.provider_sign_url %}
+            <a class="button secondary" href="{{ signature_request.provider_sign_url }}" target="_blank" rel="noreferrer">Abrir documento listo para firma</a>
+            {% endif %}
+            {% if signature_request.status == 'SIGNED' %}
+            <a class="button secondary" href="/api/signatures/{{ signature_request.id }}/download/">Descargar documento firmado</a>
+            {% else %}
+            <span class="button secondary" style="opacity: 0.5; pointer-events: none;">Documento firmado no disponible</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="panel stack">
+        <h3 style="margin: 0;">Registro del proceso</h3>
+        {% if signature_request.events.all %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Evento</th>
+                    <th>Origen</th>
+                    <th>Procesado</th>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in signature_request.events.all %}
+                <tr>
+                    <td>{{ event.get_event_type_display }}</td>
+                    <td>{{ event.provider_event_type }}</td>
+                    <td>{{ event.processed|yesno:"Si,No" }}</td>
+                    <td>{{ event.received_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">Aun no hay novedades registradas para esta solicitud.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

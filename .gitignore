@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+db.sqlite3
+media/
+staticfiles/
+venv/
+docker/mi_app/.env
+docker/traefik/.env
+docker/traefik/letsencrypt/acme.json

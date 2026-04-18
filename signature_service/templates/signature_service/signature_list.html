@@ -1,0 +1,48 @@
+{% extends "signature_service/base.html" %}
+
+{% block title %}Solicitudes | DataIn Sign{% endblock %}
+{% block hero_title %}Panel de solicitudes de firma{% endblock %}
+{% block hero_text %}Consulta el estado operativo de cada documento, revisa al firmante y entra al detalle para iniciar o validar el proceso de firma.{% endblock %}
+
+{% block content %}
+<div class="panel stack">
+    <div>
+        <h2 class="page-title">Solicitudes activas</h2>
+        <p class="page-subtitle">Vista operativa del servicio de firma digital de DataIn.</p>
+    </div>
+    <div class="actions">
+        <a class="button" href="{% url 'signature_service:signature-create' %}">Nueva solicitud</a>
+    </div>
+    {% if signatures %}
+    <table>
+        <thead>
+            <tr>
+                <th>Documento</th>
+                <th>Firmante</th>
+                <th>Estado</th>
+                <th>Creado</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for signature in signatures %}
+            <tr>
+                <td>{{ signature.document_name }}</td>
+                <td>
+                    <strong>{{ signature.signer_name }}</strong><br>
+                    <span class="muted">{{ signature.signer_email }}</span>
+                </td>
+                <td>
+                    <span class="status {{ signature.status|lower }}">{{ signature.get_status_display }}</span>
+                </td>
+                <td>{{ signature.created_at|date:"Y-m-d H:i" }}</td>
+                <td><a class="button secondary" href="{% url 'signature_service:signature-detail' signature.id %}">Seguimiento</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No hay solicitudes registradas por ahora.</p>
+    {% endif %}
+</div>
+{% endblock %}

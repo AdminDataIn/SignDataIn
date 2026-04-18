@@ -1,0 +1,18 @@
+[Unit]
+Description=DataIn Signature Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/signature_service
+EnvironmentFile=/var/www/signature_service/.env
+ExecStart=/var/www/signature_service/venv/bin/gunicorn -c /var/www/signature_service/deploy/gunicorn.conf.py config.wsgi:application
+Restart=always
+RestartSec=5
+KillSignal=SIGQUIT
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
